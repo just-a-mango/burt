@@ -4,8 +4,8 @@
 
 ## How to use
 
-- ```cargo run```
-- ```cargo build --release && burt.exe(extension depends on the platform)```
+- ```cargo run -- <file to edit>```
+- ```cargo build --release && burt.exe(extension depends on the platform) <file to edit>```
 
 ## 🏆 Goals
 #### - 🔃 Allow shown text to be edited
