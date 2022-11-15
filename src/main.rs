@@ -1,4 +1,4 @@
-use std::{io::{stdout, Read, Write}};
+use std::{io::{stdout, Read, Write}, env};
 use crossterm::{style::{self, SetBackgroundColor, SetForegroundColor, ResetColor}, execute, terminal::{Clear, ClearType}, cursor::{MoveTo, self}};
 
 fn refresh(file_path: &str, file_content: &str, lines: Vec<&str>) {
@@ -11,7 +11,8 @@ fn refresh(file_path: &str, file_content: &str, lines: Vec<&str>) {
 }
 
 fn main() {
-    let file_path = "playground.txt";
+    let args: Vec<String> = env::args().collect();
+    let file_path = &args[1];
     // read file to string with write permissions
     let mut file = std::fs::OpenOptions::new()
         .read(true)
