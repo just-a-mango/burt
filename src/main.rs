@@ -51,10 +51,10 @@ fn remove_char(mut lines: Vec<String>) -> Vec<String> {
     } else if y as usize > 0 {
         if y > 0 {
             // move cursor to where the line above ends
-            let mut line = lines.remove(y as usize);
+            let line = lines.remove(y as usize);
             let prev_line = lines.get_mut(y as usize - 1).unwrap();
+            cursor_pos = (prev_line.len() as u16, y - 1);
             prev_line.push_str(&line);
-            cursor_pos = (prev_line.len() as u16 - 5, y - 1);
         }
     } else {
         // if the line is empty, remove it, and move the cursor to the end of the previous line
@@ -94,6 +94,10 @@ fn insert_new_line(temp_two_lines: Vec<String>) -> Vec<String> {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+    if args.len() < 2 {
+        println!("BURT\nBy Just_a_Mango\n\nUsage: burt <file>");
+        return;
+    }
     let file_path = &args[1];
     // read file to string with write permissions
     let mut file = std::fs::OpenOptions::new()
@@ -110,7 +114,8 @@ fn main() {
     refresh(file_path, file_content.split('\n').collect());
     // enable raw mode
     crossterm::terminal::enable_raw_mode().unwrap();
-    execute!(stdout(), MoveTo(0, 1)).unwrap();
+    // move cursor to the end of the file
+    execute!(stdout(), MoveTo(file_content.split('\n').last().unwrap().len() as u16, file_content.split('\n').count() as u16)).unwrap();
     let mut lines: Vec<String> = file_content.split('\n').map(|x| x.to_string()).collect();
     loop {
         // read terminal height and width
