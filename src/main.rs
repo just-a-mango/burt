@@ -1,5 +1,6 @@
 use std::{io::{stdout, Read, Write}, env};
-use crossterm::{style::{self, SetBackgroundColor, SetForegroundColor, ResetColor}, execute, terminal::{Clear, ClearType}, cursor::{MoveTo, self}};
+use crossterm::{style::{self, SetBackgroundColor, SetForegroundColor, ResetColor}, execute, terminal::{Clear, ClearType}, cursor::{MoveTo, self, MoveUp, MoveDown}};
+
 
 fn refresh(file_path: &str, lines: Vec<&str>) {
     // calculate terminal width and convert it to usize
@@ -7,33 +8,17 @@ fn refresh(file_path: &str, lines: Vec<&str>) {
     // clear the terminal and print relevant info on the file
     execute!(stdout(), Clear(ClearType::All), MoveTo(0, 0),SetBackgroundColor(style::Color::White), SetForegroundColor(style::Color::Black),style::Print(format!("{: ^terminal_width$}", format!("BURT   --   Editing: {}   --   {} line(s)", file_path, lines.len()))), ResetColor, style::Print("\n")).unwrap();
     // print the file
+
     let to_print = lines.join("\n");
     execute!(stdout(), style::Print(to_print)).unwrap();
 }
 
-fn insert_char(mut lines: Vec<String>, char_to_insert: char) -> Vec<String> {
-    // get the cursor position
-    let (x, mut y) = cursor::position().unwrap();
-    y -= 1;
-    // get the line the cursor is on
-    let line = lines.get_mut(y as usize).unwrap();
-    if x as usize > line.len() {
-        // if the cursor is past the end of the line, add spaces until it's at the end
-        let mut spaces = String::new();
-        for _ in 0..(x as usize - line.len()) {
-            spaces.push(' ');
-        }
-        line.push_str(&spaces);
-    }
-    // insert the character
-    line.insert(x as usize, char_to_insert);
-    // save cursor position
-    let cursor_pos = (x + 1, y);
-    // erase the current line and print the new one
-    execute!(stdout(), MoveTo(0, y + 1), Clear(ClearType::CurrentLine), style::Print(line)).unwrap();
-    // move the cursor to the saved position
-    execute!(stdout(), MoveTo(cursor_pos.0, cursor_pos.1 + 1)).unwrap();
-
+fn insert_char(mut lines: Vec<String>, char_to_insert: char, current_line: usize) -> Vec<String> {
+    // // insert the character at the current line and position
+    // lines[current_line].insert(cursor::position().unwrap().0 as usize, char_to_insert);
+    // // re-render the file with the correct lines type
+    // refresh(&env::args().nth(1).unwrap(), lines.iter().map(|x| x.as_str()).collect());
+    // // return the modified lines
     return lines;
 }
 
@@ -115,13 +100,19 @@ fn main() {
     let mut file_content = String::new();
     file.read_to_string(&mut file_content).unwrap();
     // split file content into lines
-    
-    refresh(file_path, file_content.split('\n').collect());
+    let shown_lines:Vec<&str> = file_content.split('\n').collect();
+    // strip shown_lines to terminal height
+    let shown_lines = &shown_lines[0..(crossterm::terminal::size().unwrap().1 as usize - 1)];
+    // convert lines to strings
+    let temp_lines: Vec<String> = shown_lines.iter().map(|x| x.to_string()).collect();
+    refresh(file_path, temp_lines.iter().map(|x| x.as_str()).collect());
     // enable raw mode
     crossterm::terminal::enable_raw_mode().unwrap();
     // move cursor to the end of the file
-    execute!(stdout(), MoveTo(file_content.split('\n').last().unwrap().len() as u16, file_content.split('\n').count() as u16)).unwrap();
+    // execute!(stdout(), MoveTo(file_content.split('\n').last().unwrap().len() as u16, file_content.split('\n').count() as u16)).unwrap();
+    execute!(stdout(), MoveTo(0, 1)).unwrap();
     let mut lines: Vec<String> = file_content.split('\n').map(|x| x.to_string()).collect();
+    let mut current_line = 0;
     loop {
         // read terminal height and width
         // let terminal_height = crossterm::terminal::size().unwrap().1 as usize;
@@ -135,21 +126,35 @@ fn main() {
             crossterm::event::Event::Key(key) => {
                 match key.code {
                     crossterm::event::KeyCode::Up => {
-                        // move cursor up
-                        if cursor_position.1 > 1 {
-                            execute!(stdout(), crossterm::cursor::MoveUp(1)).unwrap();
-                            if lines[cursor_position.1 as usize - 2].len() < cursor_position.0 as usize && lines[cursor_position.1 as usize - 2].len() > 2 {
-                                execute!(stdout(), MoveTo(lines[cursor_position.1 as usize - 2].len() as u16, cursor_position.1 - 1)).unwrap();
-                            }
+                        // if the cursor is on the first line and current_line is greater than terminal_height, scroll up
+                        if cursor_position.1 == 1 && current_line > 0 {
+                            // save cursor position
+                            let cursor_pos = (cursor_position.0, cursor_position.1);
+                            current_line -= 1;
+                            let temp_lines = &lines[current_line..(current_line + crossterm::terminal::size().unwrap().1 as usize - 1)];
+                            let temp_lines: Vec<&str> = temp_lines.iter().map(|x| x.as_str()).collect();
+                            refresh(file_path, temp_lines);
+                            // move the cursor to the saved position
+                            execute!(stdout(), MoveTo(cursor_pos.0, cursor_pos.1)).unwrap();
+                        } else if cursor_position.1 > 1 {
+                            current_line -= 1;
+                            execute!(stdout(), MoveUp(1)).unwrap();
                         }
                     },
                     crossterm::event::KeyCode::Down => {
-                        // move cursor down
-                        if cursor_position.1 < lines.len() as u16 {
-                            execute!(stdout(), crossterm::cursor::MoveDown(1)).unwrap();
-                            if lines[cursor_position.1 as usize].len() < cursor_position.0 as usize && lines[cursor_position.1 as usize].len() > 2 {
-                                execute!(stdout(), MoveTo(lines[cursor_position.1 as usize].len() as u16, cursor_position.1 + 1)).unwrap();
-                            }
+                        // if the cursor is on the last line and current_line is less than lines.len() - terminal_height, scroll down, else, move the cursor down
+                        if cursor_position.1 == crossterm::terminal::size().unwrap().1 - 1 && current_line < lines.len() - crossterm::terminal::size().unwrap().1 as usize - 1 {
+                            // save cursor position
+                            let cursor_pos = (cursor_position.0, cursor_position.1);
+                            current_line += 1;
+                            let temp_lines = &lines[current_line..(current_line + crossterm::terminal::size().unwrap().1 as usize - 1)];
+                            let temp_lines: Vec<&str> = temp_lines.iter().map(|x| x.as_str()).collect();
+                            refresh(file_path, temp_lines);
+                            // move the cursor to the saved position
+                            execute!(stdout(), MoveTo(cursor_pos.0, cursor_pos.1)).unwrap();
+                        } else if cursor_position.1 < crossterm::terminal::size().unwrap().1 {
+                            current_line += 1;
+                            execute!(stdout(), MoveDown(1)).unwrap();
                         }
                     },
                     crossterm::event::KeyCode::Left => {
@@ -157,10 +162,11 @@ fn main() {
                         execute!(stdout(), crossterm::cursor::MoveLeft(1)).unwrap();
                     },
                     crossterm::event::KeyCode::Right => {
-                        // move cursor right
-                        if lines[cursor_position.1 as usize - 1].len() as u16 > cursor_position.0 {
+                        // move cursor right if it is not at the end of the line (use current_line to get the line)
+                        if cursor_position.0 < lines[current_line].len() as u16 {
                             execute!(stdout(), crossterm::cursor::MoveRight(1)).unwrap();
                         }
+
                     },
                     crossterm::event::KeyCode::Char(c) => {
                         if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
@@ -189,10 +195,9 @@ fn main() {
                             }
                         } else {
                             // insert character
-                            let temp_lines = lines.clone();
-                            let temp_two_lines: Vec<String> = temp_lines.iter().map(|x| x.to_string()).collect();
+                            let temp_two_lines: Vec<String> = lines.clone().iter().map(|x| x.to_string()).collect();
                             // set lines to the new lines and convert them to a vector of strings without a borrow checker error
-                            lines = insert_char(temp_two_lines, c);
+                            lines = insert_char(temp_two_lines, c, current_line);
                         }
                     },
                     crossterm::event::KeyCode::Backspace => {
