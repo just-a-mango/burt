@@ -134,21 +134,6 @@ fn main() {
         match key {
             crossterm::event::Event::Key(key) => {
                 match key.code {
-                    crossterm::event::KeyCode::Esc => {
-                        // disable raw mode
-                        crossterm::terminal::disable_raw_mode().unwrap();
-                        // clear the terminal
-                        execute!(stdout(), Clear(ClearType::All)).unwrap();
-                        // save the file without erasing the first line
-                        let mut file = std::fs::OpenOptions::new()
-                            .write(true)
-                            .truncate(true)
-                            .open(file_path)
-                            .unwrap();
-                        file.write_all(lines.join("\n").as_bytes()).unwrap();
-                        // exit
-                        std::process::exit(0);
-                    },
                     crossterm::event::KeyCode::Up => {
                         // move cursor up
                         if cursor_position.1 > 1 {
@@ -178,11 +163,37 @@ fn main() {
                         }
                     },
                     crossterm::event::KeyCode::Char(c) => {
-                        // insert character
-                        let temp_lines = lines.clone();
-                        let temp_two_lines: Vec<String> = temp_lines.iter().map(|x| x.to_string()).collect();
-                        // set lines to the new lines and convert them to a vector of strings without a borrow checker error
-                        lines = insert_char(temp_two_lines, c);
+                        if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+                            match c {
+                                's' => {
+                                    // save the file without erasing the first line
+                                    let mut file = std::fs::OpenOptions::new()
+                                        .write(true)
+                                        .truncate(true)
+                                        .open(file_path)
+                                        .unwrap();
+                                    file.write_all(lines.join("\n").as_bytes()).unwrap();
+                                },
+                                'q' => {
+                                    // disable raw mode
+                                    crossterm::terminal::disable_raw_mode().unwrap();
+                                    // clear the terminal
+                                    execute!(stdout(), Clear(ClearType::All)).unwrap();
+                                    // exit
+                                    std::process::exit(0);
+                                },
+                                'r' => {
+                                    refresh(file_path, lines.iter().map(|x| x.as_str()).collect());
+                                }
+                                _ => {}
+                            }
+                        } else {
+                            // insert character
+                            let temp_lines = lines.clone();
+                            let temp_two_lines: Vec<String> = temp_lines.iter().map(|x| x.to_string()).collect();
+                            // set lines to the new lines and convert them to a vector of strings without a borrow checker error
+                            lines = insert_char(temp_two_lines, c);
+                        }
                     },
                     crossterm::event::KeyCode::Backspace => {
                         // remove character
