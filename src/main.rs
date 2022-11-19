@@ -29,8 +29,8 @@ fn insert_char(mut lines: Vec<String>, char_to_insert: char) -> Vec<String> {
     line.insert(x as usize, char_to_insert);
     // save cursor position
     let cursor_pos = (x + 1, y);
-    // refresh the terminal
-    refresh(&env::args().nth(1).unwrap(), lines.iter().map(|x| x.as_str()).collect());
+    // erase the current line and print the new one
+    execute!(stdout(), MoveTo(0, y + 1), Clear(ClearType::CurrentLine), style::Print(line)).unwrap();
     // move the cursor to the saved position
     execute!(stdout(), MoveTo(cursor_pos.0, cursor_pos.1 + 1)).unwrap();
 
@@ -48,6 +48,11 @@ fn remove_char(mut lines: Vec<String>) -> Vec<String> {
     if lines[y as usize].len() > 0 && x as usize > 0 {
         lines[y as usize].remove(x as usize - 1);
         cursor_pos = (x - 1, y);
+        // erase the current line and print the new one
+        execute!(stdout(), MoveTo(0, y + 1), Clear(ClearType::CurrentLine), style::Print(&lines[y as usize])).unwrap();
+        // move the cursor to the saved position
+        execute!(stdout(), MoveTo(cursor_pos.0, cursor_pos.1 + 1)).unwrap();
+        return lines;
     } else if y as usize > 0 {
         if y > 0 {
             // move cursor to where the line above ends
