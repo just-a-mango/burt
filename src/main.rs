@@ -1,6 +1,5 @@
 use std::{io::{stdout, Read, Write}, env};
-use crossterm::{style::{self, SetBackgroundColor, SetForegroundColor, ResetColor}, execute, terminal::{Clear, ClearType}, cursor::{MoveTo, self, MoveUp, MoveDown}};
-
+use crossterm::{style::{self, SetBackgroundColor, SetForegroundColor, ResetColor}, execute, terminal::{Clear, ClearType}, cursor::{MoveTo, MoveUp, MoveDown}};
 
 fn refresh(file_path: &str, lines: Vec<&str>) {
     // calculate terminal width and convert it to usize
@@ -11,75 +10,6 @@ fn refresh(file_path: &str, lines: Vec<&str>) {
 
     let to_print = lines.join("\n");
     execute!(stdout(), style::Print(to_print)).unwrap();
-}
-
-fn insert_char(mut lines: Vec<String>, char_to_insert: char, current_line: usize) -> Vec<String> {
-    // // insert the character at the current line and position
-    // lines[current_line].insert(cursor::position().unwrap().0 as usize, char_to_insert);
-    // // re-render the file with the correct lines type
-    // refresh(&env::args().nth(1).unwrap(), lines.iter().map(|x| x.as_str()).collect());
-    // // return the modified lines
-    return lines;
-}
-
-fn remove_char(mut lines: Vec<String>) -> Vec<String> {
-    // get the cursor position
-    let (x, mut y) = cursor::position().unwrap();
-    y -= 1;
-    // get the line the cursor is on
-    // let line = lines.get_mut(y as usize).unwrap();
-    // remove the character
-    let mut cursor_pos = (0, 0);
-    if lines[y as usize].len() > 0 && x as usize > 0 {
-        lines[y as usize].remove(x as usize - 1);
-        cursor_pos = (x - 1, y);
-        // erase the current line and print the new one
-        execute!(stdout(), MoveTo(0, y + 1), Clear(ClearType::CurrentLine), style::Print(&lines[y as usize])).unwrap();
-        // move the cursor to the saved position
-        execute!(stdout(), MoveTo(cursor_pos.0, cursor_pos.1 + 1)).unwrap();
-        return lines;
-    } else if y as usize > 0 {
-        if y > 0 {
-            // move cursor to where the line above ends
-            let line = lines.remove(y as usize);
-            let prev_line = lines.get_mut(y as usize - 1).unwrap();
-            cursor_pos = (prev_line.len() as u16, y - 1);
-            prev_line.push_str(&line);
-        }
-    } else {
-        // if the line is empty, remove it, and move the cursor to the end of the previous line
-        if y > 0 {
-            lines.remove(y as usize);
-            cursor_pos = (lines.get(y as usize - 1).unwrap().len() as u16, y - 1);
-        }
-        
-    }
-    // save cursor position
-    
-    // refresh the terminal
-    refresh(&env::args().nth(1).unwrap(), lines.iter().map(|x| x.as_str()).collect());
-    // move the cursor to the saved position
-    execute!(stdout(), MoveTo(cursor_pos.0, cursor_pos.1 + 1)).unwrap();
-
-    return lines;
-}
-
-fn insert_new_line(temp_two_lines: Vec<String>) -> Vec<String> {
-    let mut lines = temp_two_lines;
-    let (x, mut y) = cursor::position().unwrap();
-    y -= 1;
-    // get the line the cursor is on
-    let line = lines.get_mut(y as usize).unwrap();
-    // split the line into two lines
-    let new_line = line.split_off(x as usize);
-    // add the new line to the lines vector
-    lines.insert(y as usize + 1, new_line);
-    // refresh the terminal
-    refresh(&env::args().nth(1).unwrap(), lines.iter().map(|x| x.as_str()).collect());
-    // move the cursor to the saved position
-    execute!(stdout(), MoveTo(0, y + 2)).unwrap();
-
-    return lines;
 }
 
 fn main() {
@@ -101,11 +31,14 @@ fn main() {
     file.read_to_string(&mut file_content).unwrap();
     // split file content into lines
     let shown_lines:Vec<&str> = file_content.split('\n').collect();
+    // let terminal_height = crossterm::terminal::size().unwrap().1 as usize;
     // strip shown_lines to terminal height
-    let shown_lines = &shown_lines[0..(crossterm::terminal::size().unwrap().1 as usize - 1)];
-    // convert lines to strings
-    let temp_lines: Vec<String> = shown_lines.iter().map(|x| x.to_string()).collect();
-    refresh(file_path, temp_lines.iter().map(|x| x.as_str()).collect());
+    // REMOVE COMMENT IF NOT WORKING {
+    // if (terminal_height - 1) < shown_lines.len() {
+    //     let shown_lines = &shown_lines[0..(terminal_height - 1)];
+    // }
+    // let temp_lines: Vec<String> = shown_lines.iter().map(|x| x.to_string()).collect();
+    // } REMOVE COMMENT IF NOT WORKING
     // enable raw mode
     crossterm::terminal::enable_raw_mode().unwrap();
     // move cursor to the end of the file
@@ -113,6 +46,10 @@ fn main() {
     execute!(stdout(), MoveTo(0, 1)).unwrap();
     let mut lines: Vec<String> = file_content.split('\n').map(|x| x.to_string()).collect();
     let mut current_line = 0;
+    let mut line_index = 1;
+    let terminal_height = crossterm::terminal::size().unwrap().1 as usize;
+    refresh(file_path, lines[current_line..(current_line + terminal_height - 1)].iter().map(|x| x.as_str()).collect());
+    execute!(stdout(), MoveTo(0, 1)).unwrap();
     loop {
         // read terminal height and width
         // let terminal_height = crossterm::terminal::size().unwrap().1 as usize;
@@ -126,47 +63,50 @@ fn main() {
             crossterm::event::Event::Key(key) => {
                 match key.code {
                     crossterm::event::KeyCode::Up => {
-                        // if the cursor is on the first line and current_line is greater than terminal_height, scroll up
-                        if cursor_position.1 == 1 && current_line > 0 {
-                            // save cursor position
-                            let cursor_pos = (cursor_position.0, cursor_position.1);
-                            current_line -= 1;
-                            let temp_lines = &lines[current_line..(current_line + crossterm::terminal::size().unwrap().1 as usize - 1)];
-                            let temp_lines: Vec<&str> = temp_lines.iter().map(|x| x.as_str()).collect();
-                            refresh(file_path, temp_lines);
-                            // move the cursor to the saved position
-                            execute!(stdout(), MoveTo(cursor_pos.0, cursor_pos.1)).unwrap();
-                        } else if cursor_position.1 > 1 {
-                            current_line -= 1;
+                        // if the cursor is on the first line and current_line is greater than terminal_height, scroll up, otherwise move the cursor up
+                        if cursor_position.1 > 1 {
                             execute!(stdout(), MoveUp(1)).unwrap();
+                            line_index -= 1;
+                        } else if current_line > 0 {
+                            current_line -= 1;
+                            line_index -= 1;
+                            let terminal_height = crossterm::terminal::size().unwrap().1 as usize;
+                            let shown_lines = &lines[current_line..(current_line + terminal_height - 1)];
+                            refresh(file_path, shown_lines.iter().map(|x| x.as_str()).collect());
+
+                            execute!(stdout(), MoveTo(cursor_position.0, cursor_position.1)).unwrap();
                         }
                     },
                     crossterm::event::KeyCode::Down => {
-                        // if the cursor is on the last line and current_line is less than lines.len() - terminal_height, scroll down, else, move the cursor down
-                        if cursor_position.1 == crossterm::terminal::size().unwrap().1 - 1 && current_line < lines.len() - crossterm::terminal::size().unwrap().1 as usize - 1 {
-                            // save cursor position
-                            let cursor_pos = (cursor_position.0, cursor_position.1);
-                            current_line += 1;
-                            let temp_lines = &lines[current_line..(current_line + crossterm::terminal::size().unwrap().1 as usize - 1)];
-                            let temp_lines: Vec<&str> = temp_lines.iter().map(|x| x.as_str()).collect();
-                            refresh(file_path, temp_lines);
-                            // move the cursor to the saved position
-                            execute!(stdout(), MoveTo(cursor_pos.0, cursor_pos.1)).unwrap();
-                        } else if cursor_position.1 < crossterm::terminal::size().unwrap().1 {
-                            current_line += 1;
+                        // if the cursor is on the last line and current_line is less than the number of lines in the file, scroll down, otherwise move the cursor down
+                        if cursor_position.1 < crossterm::terminal::size().unwrap().1 - 1 {
                             execute!(stdout(), MoveDown(1)).unwrap();
+                            line_index += 1;
+                        } else if (terminal_height - 1) > lines.len() {
+                            current_line += 1;
+                            line_index += 1;
+                            if current_line + 1 == shown_lines.len() {
+                                execute!(stdout(), MoveDown(1)).unwrap();
+                            }
+                        }
+                        else if current_line < (lines.len() - 1 ) && current_line < lines.len() - (crossterm::terminal::size().unwrap().1 as usize - 2) && (current_line + terminal_height - 1) < lines.len() {
+                            current_line += 1;
+                            line_index += 1;
+                            let terminal_height = crossterm::terminal::size().unwrap().1 as usize;
+                            let shown_lines = &lines[current_line..(current_line + terminal_height - 1)];
+                            refresh(file_path, shown_lines.iter().map(|x| x.as_str()).collect());
+                            execute!(stdout(), MoveTo(cursor_position.0, cursor_position.1)).unwrap();
                         }
                     },
                     crossterm::event::KeyCode::Left => {
                         // move cursor left
-                        execute!(stdout(), crossterm::cursor::MoveLeft(1)).unwrap();
+                            execute!(stdout(), crossterm::cursor::MoveLeft(1)).unwrap();
                     },
                     crossterm::event::KeyCode::Right => {
                         // move cursor right if it is not at the end of the line (use current_line to get the line)
-                        if cursor_position.0 < lines[current_line].len() as u16 {
+                        if cursor_position.0 < (lines[line_index - 1].len() as u16 - 1) {
                             execute!(stdout(), crossterm::cursor::MoveRight(1)).unwrap();
                         }
-
                     },
                     crossterm::event::KeyCode::Char(c) => {
                         if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
@@ -194,25 +134,48 @@ fn main() {
                                 _ => {}
                             }
                         } else {
-                            // insert character
-                            let temp_two_lines: Vec<String> = lines.clone().iter().map(|x| x.to_string()).collect();
-                            // set lines to the new lines and convert them to a vector of strings without a borrow checker error
-                            lines = insert_char(temp_two_lines, c, current_line);
+                            // insert the character at the cursor position
+                            let mut line = lines[line_index - 1].clone();
+                            line.insert(cursor_position.0 as usize, c);
+                            let new_line = line.clone();
+                            lines[line_index - 1] = line;
+                            // REMOVE COMMENT IF NOT WORKING
+                            // let shown_lines = &lines[current_line..(current_line + terminal_height - 1)];
+                            // move the cursor right
+                            execute!(stdout(), crossterm::cursor::MoveRight(1)).unwrap();
+                            // REMOVE COMMENT IF NOT WORKING
+                            // let terminal_height = crossterm::terminal::size().unwrap().1 as usize;
+                            // erase the line and print the new line
+                            execute!(stdout(), Clear(ClearType::CurrentLine), MoveTo(0, cursor_position.1), style::Print(new_line), MoveTo(cursor_position.0 + 1, cursor_position.1)).unwrap();
                         }
                     },
                     crossterm::event::KeyCode::Backspace => {
-                        // remove character
-                        let temp_lines = lines.clone();
-                        let temp_two_lines: Vec<String> = temp_lines.iter().map(|x| x.to_string()).collect();
-                        // set lines to the new lines and convert them to a vector of strings without a borrow checker error
-                        lines = remove_char(temp_two_lines);
+                        // remove the character at the cursor position
+                        let mut line = lines[line_index - 1].clone();
+                        line.remove(cursor_position.0 as usize - 1);
+                        let new_line = line.clone();
+                        lines[line_index - 1] = line;
+                        // REMOVE COMMENT IF NOT WORKING
+                        // let shown_lines = &lines[current_line..(current_line + terminal_height - 1)];
+                        // move the cursor left
+                        execute!(stdout(), crossterm::cursor::MoveLeft(1)).unwrap();
+                        // REMOVE COMMENT IF NOT WORKING
+                        // let terminal_height = crossterm::terminal::size().unwrap().1 as usize;
+                        // erase the line and print the new line
+                        execute!(stdout(), Clear(ClearType::CurrentLine), MoveTo(0, cursor_position.1), style::Print(new_line), MoveTo(cursor_position.0 - 1, cursor_position.1)).unwrap();
+                    
                     },
                     crossterm::event::KeyCode::Enter => {
-                        // insert new line
-                        let temp_lines = lines.clone();
-                        let temp_two_lines: Vec<String> = temp_lines.iter().map(|x| x.to_string()).collect();
-                        // set lines to the new lines and convert them to a vector of strings without a borrow checker error
-                        lines = insert_new_line(temp_two_lines);
+                        // insert a new line at the cursor position
+                        let mut line = lines[line_index - 1].clone();
+                        let new_line = line.split_off(cursor_position.0 as usize);
+                        // save cursor position
+                        let cursor_position = crossterm::cursor::position().unwrap();
+                        lines.insert(line_index, new_line);
+                        // refresh the screen
+                        refresh(file_path, lines.iter().map(|x| x.as_str()).collect());
+                        // move the cursor to the new line
+                        execute!(stdout(), MoveTo(0, cursor_position.1 + 1)).unwrap();
                     },
                     _ => {}
                 }
